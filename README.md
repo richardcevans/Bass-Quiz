@@ -11,7 +11,7 @@ A browser-based bass guitar note reading trainer. Shows a note on the bass clef 
 - Standard 4-string tuning (E A D G), written an octave above where it sounds, the way bass is notated
 - Frets 0 to 5 for beginners (written E2 to C4) or 0 to 12 (up to G4 with ledger lines)
 - Pick which strings to practice, turn sharps and flats on, show note names on the neck while learning
-- Auto-next: moves on 5 seconds after each answer with a countdown on the Next button (turn it off in the settings row)
+- Auto-next: moves on after each answer with a countdown on the Next button. Defaults to 5 seconds after a right answer and 7 after a wrong one, each adjustable from 1 to 9 seconds, or turn it off in the settings row
 - Real fingerstyle bass audio, auto-play mode, and a Hear it button
 - Sets of 20 with a summary, set history, a weak-spot engine that brings missed notes back more often, and a daily streak
 - Help screen with the bass clef mnemonics and where the open strings sit on the staff

@@ -106,6 +106,7 @@ button { font-family:inherit; cursor:pointer; }
 .modal th { color:var(--muted); font-size:.68rem; text-transform:uppercase; letter-spacing:.06em; }
 .big { font-size:2.4rem; font-weight:900; color:var(--amber); }
 .audionote { text-align:center; color:var(--muted); font-size:.75rem; margin-top:4px; min-height:1em; }
+.sval { color:var(--ink); font-weight:800; font-size:.85rem; min-width:26px; text-align:center; }
 .foot { color:var(--muted); font-size:.72rem; text-align:center; margin-top:6px; }
 </style>
 </head>
@@ -231,8 +232,9 @@ function spell(midi, flat) {
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 const SKEY = 'bassQuiz.settings';
-let cfg = { mode:'notes', maxFret:5, strings:[0,1,2,3], acc:false, answer:'fret', hear:true, names:true, auto:true };
+let cfg = { mode:'notes', maxFret:5, strings:[0,1,2,3], acc:false, answer:'fret', hear:true, names:true, auto:true, autoOk:5, autoBad:7 };
 try { Object.assign(cfg, JSON.parse(localStorage.getItem(SKEY) || '{}')); } catch (e) {}
+['autoOk', 'autoBad'].forEach(k => { cfg[k] = Math.min(9, Math.max(1, Math.round(+cfg[k]) || (k === 'autoOk' ? 5 : 7))); });
 function saveCfg() { try { localStorage.setItem(SKEY, JSON.stringify(cfg)); } catch (e) {} }
 
 // ── Audio ────────────────────────────────────────────────────────────────────
@@ -487,15 +489,15 @@ function clearMarks() { document.querySelectorAll('#neck .mk').forEach(n => n.re
 
 // ── Quiz state ───────────────────────────────────────────────────────────────
 let cur = null, answered = false, pendingEnd = false, advTimer = null, advTick = null;
-const AUTO_SECS = 5;
+let lastOk = true;
 function clearAdvance() { clearTimeout(advTimer); clearInterval(advTick); advTick = null; }
 function nextLabel() { return pendingEnd ? 'See results →' : 'Next →'; }
 // After an answer, count down and move on by itself (if Auto-next is on).
 // The count pauses while a panel is open, and it never jumps into the set summary.
-function scheduleAdvance() {
+function scheduleAdvance(ok) {
   clearAdvance();
   if (!cfg.auto || pendingEnd) return;
-  let left = AUTO_SECS;
+  let left = ok ? cfg.autoOk : cfg.autoBad;
   const paint = () => { $('nextBtn').textContent = 'Next (' + left + ') →'; };
   paint();
   advTick = setInterval(() => {
@@ -558,10 +560,11 @@ function countNote(ok, label, key) {
 function finish(ok, label) {
   answered = true;
   countNote(ok, label);
+  lastOk = ok;
   $('nextBtn').disabled = false;
   $('nextBtn').textContent = pendingEnd ? 'See results →' : 'Next →';
   updateScore();
-  scheduleAdvance();
+  scheduleAdvance(ok);
 }
 function advance() {
   if (!answered) return;
@@ -625,7 +628,8 @@ function onPhraseCell(s, f) {
   $('nextBtn').disabled = false;
   $('nextBtn').textContent = pendingEnd ? 'See results →' : 'Next →';
   updateScore();
-  scheduleAdvance();
+  lastOk = clean === phrase.length;
+  scheduleAdvance(lastOk);
 }
 
 // notes mode: fretboard answer
@@ -729,6 +733,13 @@ function chip(label, active, onClick, title) {
   b.addEventListener('click', onClick);
   return b;
 }
+// - 5s + control for a setting stored in cfg[key], limited to 1 to 9 seconds
+function stepper(key) {
+  const mk = (t, d, tip) => chip(t, false, () => { cfg[key] = Math.min(9, Math.max(1, cfg[key] + d)); saveCfg(); renderSettings(); }, tip);
+  const v = document.createElement('span');
+  v.className = 'sval'; v.textContent = cfg[key] + 's';
+  return [mk('−', -1, 'Shorter'), v, mk('+', 1, 'Longer')];
+}
 function group(label, ...chips) {
   const g = document.createElement('div'); g.className = 'sgroup';
   const l = document.createElement('span'); l.className = 'lab'; l.textContent = label;
@@ -758,8 +769,12 @@ function renderSettings() {
   box.appendChild(group('Auto-next', chip(cfg.auto ? 'On' : 'Off', cfg.auto, () => {
     cfg.auto = !cfg.auto; saveCfg(); renderSettings();
     if (!cfg.auto) { clearAdvance(); $('nextBtn').textContent = nextLabel(); }
-    else if (answered) scheduleAdvance();
-  }, 'Move to the next question 5 seconds after you answer')));
+    else if (answered) scheduleAdvance(lastOk);
+  }, 'Move to the next question automatically')));
+  if (cfg.auto) {
+    box.appendChild(group('Right', ...stepper('autoOk')));
+    box.appendChild(group('Wrong', ...stepper('autoBad')));
+  }
   box.appendChild(group('Auto-play', chip(cfg.hear ? 'On' : 'Off', cfg.hear, () => { cfg.hear = !cfg.hear; saveCfg(); renderSettings(); if (cfg.hear && cur) hear(); })));
 }
 function applyMode() {
