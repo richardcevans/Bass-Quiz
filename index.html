@@ -231,7 +231,7 @@ function spell(midi, flat) {
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 const SKEY = 'bassQuiz.settings';
-let cfg = { mode:'notes', maxFret:5, strings:[0,1,2,3], acc:false, answer:'fret', hear:true, names:true };
+let cfg = { mode:'notes', maxFret:5, strings:[0,1,2,3], acc:false, answer:'fret', hear:true, names:true, auto:true };
 try { Object.assign(cfg, JSON.parse(localStorage.getItem(SKEY) || '{}')); } catch (e) {}
 function saveCfg() { try { localStorage.setItem(SKEY, JSON.stringify(cfg)); } catch (e) {} }
 
@@ -464,9 +464,10 @@ function buildNeck() {
       const x = neckGeo.cx(f), w = f === 0 ? 70 : FW;
       const r = el('rect', { class:'cell', x:x - w / 2, y:sy(s) - 22, width:w, height:44, 'data-s':s, 'data-f':f }, g);
       if (cfg.names) {
-        const t = el('text', { x, y:sy(s) + 5, 'text-anchor':'middle', 'font-size':13, 'font-weight':700, fill:'#e9e3d0', 'pointer-events':'none', 'font-family':'system-ui,sans-serif' }, g);
+        // white disc with black text, same look as the red and green answer markers
+        el('circle', { cx:x, cy:sy(s), r:14, fill:'#ffffff', 'pointer-events':'none' }, g);
+        const t = el('text', { x, y:sy(s) + 5, 'text-anchor':'middle', 'font-size':13, 'font-weight':800, fill:'#10131a', 'pointer-events':'none', 'font-family':'system-ui,sans-serif' }, g);
         t.textContent = fmt(SHARP_PC[(OPEN[s] + f) % 12]);
-        t.setAttribute('opacity', '0.75');
       }
       if (cfg.strings.includes(s)) r.addEventListener('click', () => onCell(s, f));
     }
@@ -485,7 +486,24 @@ function markCell(s, f, cls) {
 function clearMarks() { document.querySelectorAll('#neck .mk').forEach(n => n.remove()); }
 
 // ── Quiz state ───────────────────────────────────────────────────────────────
-let cur = null, answered = false, pendingEnd = false, advTimer = null;
+let cur = null, answered = false, pendingEnd = false, advTimer = null, advTick = null;
+const AUTO_SECS = 5;
+function clearAdvance() { clearTimeout(advTimer); clearInterval(advTick); advTick = null; }
+function nextLabel() { return pendingEnd ? 'See results →' : 'Next →'; }
+// After an answer, count down and move on by itself (if Auto-next is on).
+// The count pauses while a panel is open, and it never jumps into the set summary.
+function scheduleAdvance() {
+  clearAdvance();
+  if (!cfg.auto || pendingEnd) return;
+  let left = AUTO_SECS;
+  const paint = () => { $('nextBtn').textContent = 'Next (' + left + ') →'; };
+  paint();
+  advTick = setInterval(() => {
+    if (document.querySelector('.overlay.open')) return;
+    left--;
+    if (left <= 0) { clearAdvance(); advance(); } else paint();
+  }, 1000);
+}
 let setQ = 0, setCorrect = 0, setMisses = [], recent = [];
 
 function setFeedback(msg, kind) { const f = $('feedback'); f.textContent = msg; f.className = 'feedback' + (kind ? ' ' + kind : ''); }
@@ -499,12 +517,12 @@ function updateScore() {
   recent.slice(-10).forEach(a => { const s = document.createElement('span'); s.className = 'chipans ' + (a.ok ? 'c' : 'w'); s.textContent = (a.ok ? '✓ ' : '✗ ') + a.label; r.appendChild(s); });
 }
 function resetSet() {
-  clearTimeout(advTimer);
+  clearAdvance();
   setQ = 0; setCorrect = 0; setMisses = []; recent = []; pendingEnd = false;
   nextQuestion();
 }
 function nextQuestion() {
-  clearTimeout(advTimer);
+  clearAdvance();
   answered = false;
   $('nextBtn').disabled = true;
   $('nextBtn').textContent = 'Next →';
@@ -543,11 +561,11 @@ function finish(ok, label) {
   $('nextBtn').disabled = false;
   $('nextBtn').textContent = pendingEnd ? 'See results →' : 'Next →';
   updateScore();
-  if (ok) advTimer = setTimeout(advance, 1200);
+  scheduleAdvance();
 }
 function advance() {
   if (!answered) return;
-  clearTimeout(advTimer);
+  clearAdvance();
   if (pendingEnd) { showSummary(); return; }
   $('nextBtn').textContent = 'Next →';
   nextQuestion();
@@ -607,7 +625,7 @@ function onPhraseCell(s, f) {
   $('nextBtn').disabled = false;
   $('nextBtn').textContent = pendingEnd ? 'See results →' : 'Next →';
   updateScore();
-  if (clean === phrase.length) advTimer = setTimeout(advance, 1400);
+  scheduleAdvance();
 }
 
 // notes mode: fretboard answer
@@ -737,6 +755,11 @@ function renderSettings() {
     if (cfg.mode === 'line' || cfg.answer === 'fret')
       box.appendChild(group('Names on neck', chip(cfg.names ? 'On' : 'Off', cfg.names, () => { cfg.names = !cfg.names; saveCfg(); renderSettings(); if (!answered) buildNeck(); else resetSet(); })));
   }
+  box.appendChild(group('Auto-next', chip(cfg.auto ? 'On' : 'Off', cfg.auto, () => {
+    cfg.auto = !cfg.auto; saveCfg(); renderSettings();
+    if (!cfg.auto) { clearAdvance(); $('nextBtn').textContent = nextLabel(); }
+    else if (answered) scheduleAdvance();
+  }, 'Move to the next question 5 seconds after you answer')));
   box.appendChild(group('Auto-play', chip(cfg.hear ? 'On' : 'Off', cfg.hear, () => { cfg.hear = !cfg.hear; saveCfg(); renderSettings(); if (cfg.hear && cur) hear(); })));
 }
 function applyMode() {
