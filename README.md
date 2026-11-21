@@ -6,6 +6,7 @@ A browser-based bass guitar note reading trainer. Shows a note on the bass clef 
 
 - **Staff to Fretboard**: a note appears on the bass clef staff, tap where to play it on the neck (any spot with the right pitch counts, and the other spots light up after you answer)
 - **Note names** answer mode for warm-up, with A to G on the computer keyboard (Shift for sharp)
+- **Read a Line**: a four-note bass line in 4/4 appears on the staff, tap each note on the neck in order (scored per note on the first try, with a Play the line button so you can hear it)
 - **Tab to Staff**: a tab number is shown, pick the matching note from four staves
 - Standard 4-string tuning (E A D G), written an octave above where it sounds, the way bass is notated
 - Frets 0 to 5 for beginners (written E2 to C4) or 0 to 12 (up to G4 with ledger lines)
@@ -17,7 +18,7 @@ A browser-based bass guitar note reading trainer. Shows a note on the bass clef 
 
 ## Running
 
-**Hosted (phone or PC):** once GitHub Pages is on (Settings, Pages, deploy from the `main` branch, root folder), open `https://richardcevans.github.io/Bass-Quiz/`. On Android in Chrome, use the menu and choose **Install app**. The first load downloads about 2 MB of samples.
+**Hosted (phone or PC):** once GitHub Pages is on (Settings, Pages, deploy from the `master` branch, root folder), open `https://richardcevans.github.io/Bass-Quiz/`. On Android in Chrome, use the menu and choose **Install app**. The first load downloads about 2 MB of samples.
 
 **Locally:** double-click `start.bat` (needs Python 3), then open http://localhost:8080/. A web server is needed because browsers block loading the audio samples from a `file://` page. If the samples cannot load, the app falls back to a basic synth so the quiz still works.
 
