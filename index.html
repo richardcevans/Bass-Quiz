@@ -63,6 +63,7 @@ button { font-family:inherit; cursor:pointer; }
 .row { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin-bottom:10px; }
 .btn { background:var(--surface2); border:1px solid var(--line2); color:var(--ink); padding:9px 18px; border-radius:12px; font-size:.85rem; font-weight:700; }
 .btn:hover { background:#232733; border-color:var(--amber); }
+.btn.active { background:var(--amber); border-color:var(--amber); color:var(--amber-ink); }
 .btn.primary { background:var(--amber); border-color:var(--amber); color:var(--amber-ink); }
 .btn:disabled { opacity:.35; cursor:default; }
 .feedback { min-height:46px; max-width:760px; margin:6px auto 12px; padding:11px 16px; border-radius:14px; text-align:center; font-size:.95rem; line-height:1.4; color:var(--soft); }
@@ -129,7 +130,7 @@ button { font-family:inherit; cursor:pointer; }
       <button class="tab" data-mode="line">Read a Line</button>
       <button class="tab" data-mode="tab">Tab → Staff</button>
       <button class="tab ghost" id="btnWeak">Weak spots</button>
-      <button class="tab ghost" id="btnHelp">Help</button>
+      <button class="tab ghost" id="btnHelp">Guide</button>
     </div>
     <div class="settings" id="settings"></div>
 
@@ -138,6 +139,7 @@ button { font-family:inherit; cursor:pointer; }
       <div class="paper" id="staffPaper"><svg id="staff"></svg></div>
       <div class="row">
         <button class="btn" id="hearBtn">🔊 Hear it</button>
+        <button class="btn" id="helpToggle" title="Label every line and space on the staff">Help</button>
       </div>
     </div>
 
@@ -159,8 +161,9 @@ button { font-family:inherit; cursor:pointer; }
 
 <div class="overlay" id="helpOv"><div class="modal">
   <h2>Reading bass clef</h2>
+  <p>Tip: the Help button under the staff labels every line and space while you practice.</p>
   <h3>Lines, bottom to top (G B D F A)</h3>
-  <p>Good Boys Do Fine Always, or Grizzly Bears Don't Fear Anything.</p>
+  <p>Grizzly Bears Don't Fear Anything.</p>
   <h3>Spaces, bottom to top (A C E G)</h3>
   <p>All Cows Eat Grass.</p>
   <h3>Open strings (written on the staff)</h3>
@@ -369,12 +372,30 @@ function posText(midi) {
 // Bass clef staff lines: y=60 (A3), 80, 100, 120, 140 (G2). One step = 10px.
 function staffY(sp) { return 140 - ((sp.oct * 7 + LET[sp.letter]) - 18) * 10; }
 
-function drawStaffBase(svg, W) {
+// Mnemonic labels for the Help overlay, keyed by the y of each line or space.
+const BASS_LABELS = {
+  60:{ l:'A', w:'Anything' }, 70:{ l:'G', w:'Grass' }, 80:{ l:'F', w:'Fear' }, 90:{ l:'E', w:'Eat' },
+  100:{ l:'D', w:"Don't" }, 110:{ l:'C', w:'Cows' }, 120:{ l:'B', w:'Bears' }, 130:{ l:'A', w:'All' },
+  140:{ l:'G', w:'Grizzly' }
+};
+function drawHelpLabels(svg, end) {
+  el('line', { x1:end + 6, x2:end + 6, y1:52, y2:148, stroke:'#d8d2c0', 'stroke-width':1 }, svg);
+  Object.entries(BASS_LABELS).forEach(([ys, info]) => {
+    const y = +ys, onLine = y % 20 === 0, cx = end + (onLine ? 21 : 99);
+    el('circle', { cx, cy:y, r:10, fill: onLine ? '#fef3c7' : '#fee2e2' }, svg);
+    const t = el('text', { x:cx, y:y + 4, 'text-anchor':'middle', 'font-size':11, 'font-weight':800, 'font-family':'system-ui,sans-serif', fill: onLine ? '#78350f' : '#7f1d1d' }, svg);
+    t.textContent = info.l;
+    const w = el('text', { x:cx + 14, y:y + 4, 'font-size':10, 'font-weight':600, 'font-family':'system-ui,sans-serif', fill:'#8a8473' }, svg);
+    w.textContent = info.w;
+  });
+}
+function drawStaffBase(svg, W, help) {
   svg.setAttribute('viewBox', '0 -16 ' + W + ' 196');
   svg.innerHTML = '';
-  const ink = '#2a2823';
+  const ink = '#2a2823', end = help ? W - 230 : W - 14;
   for (let i = 0; i < 5; i++)
-    el('line', { x1:14, x2:W - 14, y1:60 + i * 20, y2:60 + i * 20, stroke:'#6b675b', 'stroke-width':1.6 }, svg);
+    el('line', { x1:14, x2:end, y1:60 + i * 20, y2:60 + i * 20, stroke:'#6b675b', 'stroke-width':1.6 }, svg);
+  if (help) drawHelpLabels(svg, end);
   // bass clef: ball on the F line, two dots either side of it
   el('circle', { cx:32, cy:80, r:7, fill:ink }, svg);
   el('path', { d:'M32 80 C30 58 64 56 66 80 C68 104 50 126 24 138', fill:'none', stroke:ink, 'stroke-width':5.5, 'stroke-linecap':'round' }, svg);
@@ -396,25 +417,32 @@ function drawNote(svg, sp, cx, color, halo) {
   const up = y >= 100, sx = up ? cx + 11.5 : cx - 11.5;
   el('line', { x1:sx, x2:sx, y1:y, y2:up ? y - 55 : y + 55, stroke:ink, 'stroke-width':2.2 }, svg);
 }
-function drawStaff(svg, sp, W) {
-  drawStaffBase(svg, W);
-  drawNote(svg, sp, Math.round(W * 0.58));
+function drawStaff(svg, sp, W, help) {
+  drawStaffBase(svg, W, help);
+  drawNote(svg, sp, Math.round(help ? (W - 230) * 0.76 : W * 0.58));
 }
 // One bar of 4/4: status[i] is null, 'ok' or 'bad'; active is the note to play next.
-function drawPhrase(svg, sps, W, status, active) {
-  drawStaffBase(svg, W);
+function drawPhrase(svg, sps, W, status, active, help) {
+  const end = help ? W - 230 : W - 14;
+  drawStaffBase(svg, W, help);
   ['4', '4'].forEach((n, i) => {
     const t = el('text', { x:112, y:i ? 138 : 98, 'font-size':38, 'font-weight':'bold', 'font-family':'serif', fill:'#2a2823', 'text-anchor':'middle' }, svg);
     t.textContent = n;
   });
-  el('line', { x1:W - 16, x2:W - 16, y1:60, y2:140, stroke:'#2a2823', 'stroke-width':3.5 }, svg);
-  const x0 = 205, x1 = W - 56;
+  el('line', { x1:end - 2, x2:end - 2, y1:60, y2:140, stroke:'#2a2823', 'stroke-width':3.5 }, svg);
+  const x0 = 205, x1 = end - 42;
   sps.forEach((sp, i) => {
     const color = status[i] === 'ok' ? '#1f9d63' : status[i] === 'bad' ? '#d64545' : null;
     drawNote(svg, sp, x0 + (x1 - x0) * i / (sps.length - 1), color, i === active);
   });
 }
 
+let helpOpen = false;
+function renderStaff(active) {
+  const svg = $('staff');
+  if (cfg.mode === 'line') drawPhrase(svg, phrase.map(n => n.sp), helpOpen ? 760 : 560, pStatus, active === undefined ? pIdx : active, helpOpen);
+  else drawStaff(svg, cur.sp, helpOpen ? 480 : 380, helpOpen);
+}
 function drawTab(svg, s, f) {
   svg.setAttribute('viewBox', '0 0 380 180');
   svg.innerHTML = '';
@@ -532,13 +560,13 @@ function nextQuestion() {
     cur = pickWeighted(notePool(), cur && cur.key);
     cur.flat = cfg.acc ? Math.random() < 0.5 : false;
     cur.sp = spell(cur.wmidi, cur.flat);
-    drawStaff($('staff'), cur.sp, 380);
+    renderStaff();
     setFeedback(cfg.answer === 'fret' ? 'Tap the note on the neck.' : 'Pick the note name.', '');
     if (cfg.answer === 'fret') buildNeck(); else buildNames();
   } else if (cfg.mode === 'line') {
     phrase = genPhrase(); pIdx = 0; pMissed = false; pStatus = phrase.map(() => null);
     cur = { key:'line' };
-    drawPhrase($('staff'), phrase.map(n => n.sp), 560, pStatus, 0);
+    renderStaff(0);
     setFeedback('Tap the notes in order, starting with the first one.', '');
     buildNeck();
   } else {
@@ -614,13 +642,13 @@ function onPhraseCell(s, f) {
   pStatus[pIdx] = pMissed ? 'bad' : 'ok';
   pIdx++; pMissed = false;
   if (pIdx < phrase.length) {
-    drawPhrase($('staff'), phrase.map(x => x.sp), 560, pStatus, pIdx);
+    renderStaff(pIdx);
     setFeedback('Good. Next note.', 'correct');
     updateScore();
     return;
   }
   // phrase finished
-  drawPhrase($('staff'), phrase.map(x => x.sp), 560, pStatus, -1);
+  renderStaff(-1);
   $('neck').classList.add('locked');
   answered = true;
   const clean = pStatus.filter(x => x === 'ok').length;
@@ -791,6 +819,11 @@ function applyMode() {
 
 // ── Wiring ───────────────────────────────────────────────────────────────────
 document.querySelectorAll('.tab[data-mode]').forEach(t => t.addEventListener('click', () => { cfg.mode = t.dataset.mode; changed(); }));
+$('helpToggle').addEventListener('click', () => {
+  helpOpen = !helpOpen;
+  $('helpToggle').classList.toggle('active', helpOpen);
+  if (cur && (cfg.mode === 'notes' || cfg.mode === 'line')) renderStaff(cfg.mode === 'line' ? (answered ? -1 : pIdx) : undefined);
+});
 $('hearBtn').addEventListener('click', hear);
 $('hearBtn2').addEventListener('click', hear);
 $('nextBtn').addEventListener('click', advance);
